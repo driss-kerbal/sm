@@ -3,7 +3,5 @@
   "outputDirectory": ".next",
   "devCommand": "next dev",
   "installCommand": "npm ci",
-  "framework": "nextjs",
-  "nodeVersion": "18.x",
-  "regions": ["iad1"]
+  "framework": "nextjs"
 }
