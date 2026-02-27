@@ -1,15 +1,17 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { getDb, initializeDatabase } from "@/lib/db";
+import { initializeDatabase, query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 // Initialize database on startup
-try {
-  initializeDatabase();
-  console.log("✅ Database initialized on NextAuth startup");
-} catch (error) {
-  console.error("⚠️ Database initialization warning (will retry on first auth attempt):", error);
-}
+(async () => {
+  try {
+    await initializeDatabase();
+    console.log("✅ PostgreSQL database initialized on NextAuth startup");
+  } catch (error) {
+    console.error("⚠️ Database initialization warning (will retry on first auth attempt):", error);
+  }
+})();
 
 // Verify required environment variables
 if (!process.env.NEXTAUTH_SECRET) {
@@ -31,16 +33,15 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         try {
           // Ensure database is initialized
-          initializeDatabase();
-          const db = getDb();
+          await initializeDatabase();
 
           if (!credentials?.email || !credentials?.password) {
             console.warn("❌ Missing email or password");
             return null;
           }
 
-          const stmt = db.prepare("SELECT * FROM users WHERE email = ?");
-          const user = stmt.get(credentials.email) as any;
+          const result = await query("SELECT * FROM users WHERE email = $1", [credentials.email]);
+          const user = result.rows[0];
 
           if (!user) {
             console.warn(`❌ User not found: ${credentials.email}`);

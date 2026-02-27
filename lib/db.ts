@@ -1,42 +1,67 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Pool, QueryResult } from 'pg';
 import bcrypt from 'bcryptjs';
 
-const dbPath = path.join(process.cwd(), 'students.db');
+// PostgreSQL connection pool (works on Vercel)
+let pool: Pool | null = null;
 
-let dbInstance: Database.Database | null = null;
+// Detect if we're in production on Vercel
+const isProduction = process.env.NODE_ENV === 'production';
+const isDatabaseUrl = !!process.env.DATABASE_URL;
 
-export function getDb() {
-  if (!dbInstance) {
-    try {
-      dbInstance = new Database(dbPath);
-      initializeDatabase();
-    } catch (error) {
-      console.error('Failed to initialize database:', error);
-      throw error;
-    }
+export function getPool(): Pool {
+  if (pool) return pool;
+
+  let connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    // Local development fallback
+    connectionString = process.env.POSTGRES_URL || 'postgresql://postgres:postgres@localhost:5432/students_db';
+    console.log('⚠️ Using local PostgreSQL connection');
   }
-  return dbInstance;
+
+  pool = new Pool({
+    connectionString,
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
+  });
+
+  pool.on('error', (err) => {
+    console.error('❌ Unexpected error on idle client', err);
+  });
+
+  return pool;
 }
 
-export const db = getDb();
+export async function query(text: string, params?: any[]): Promise<QueryResult> {
+  const pool_ = getPool();
+  try {
+    const result = await pool_.query(text, params);
+    return result;
+  } catch (error) {
+    console.error('Database Query Error:', error);
+    throw error;
+  }
+}
 
 // Initialize database tables and default user
-export function initializeDatabase() {
+export async function initializeDatabase() {
   try {
-    const instance = dbInstance || new Database(dbPath);
+    console.log('🔄 Initializing PostgreSQL database...');
     
-    instance.exec(`
+    // Create tables
+    await query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
-        role TEXT DEFAULT 'admin'
+        role TEXT DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    await query(`
       CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         firstName TEXT NOT NULL,
         lastName TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
@@ -48,30 +73,32 @@ export function initializeDatabase() {
         country TEXT,
         enrollmentDate TEXT NOT NULL,
         status TEXT DEFAULT 'active',
-        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     // Create default admin user if it doesn't exist
     try {
-      const existingUser = instance.prepare('SELECT * FROM users WHERE email = ?').get('admin@example.com');
-      if (!existingUser) {
-        const hashedPassword = require('bcryptjs').hashSync('admin123', 10);
-        instance.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)').run(
-          'Administrator',
-          'admin@example.com',
-          hashedPassword,
-          'admin'
+      const result = await query('SELECT * FROM users WHERE email = $1', ['admin@example.com']);
+      
+      if (result.rows.length === 0) {
+        const hashedPassword = bcrypt.hashSync('admin123', 10);
+        await query(
+          'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+          ['Administrator', 'admin@example.com', hashedPassword, 'admin']
         );
         console.log('✅ Default admin user created');
+      } else {
+        console.log('✅ Admin user already exists');
       }
     } catch (err) {
-      console.error('Error creating default user:', err);
+      console.error('⚠️ Error managing default user:', err);
     }
 
-    console.log('✅ Database initialized successfully');
+    console.log('✅ PostgreSQL database initialized successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    console.error('❌ Error initializing database:', error);
+    throw error;
   }
 }

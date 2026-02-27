@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { initializeDatabase, query } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
@@ -13,10 +13,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    await initializeDatabase();
     const { id } = await params;
-    const student = db
-      .prepare("SELECT * FROM students WHERE id = ?")
-      .get(id);
+    
+    const result = await query("SELECT * FROM students WHERE id = $1", [id]);
+    const student = result.rows[0];
 
     if (!student) {
       return NextResponse.json(
@@ -27,8 +28,9 @@ export async function GET(
 
     return NextResponse.json(student);
   } catch (error) {
+    console.error("❌ Failed to fetch student:", error);
     return NextResponse.json(
-      { error: "Failed to fetch student" },
+      { error: "Failed to fetch student", details: String(error) },
       { status: 500 }
     );
   }
@@ -44,6 +46,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    await initializeDatabase();
     const { id } = await params;
     const body = await request.json();
     const {
@@ -59,15 +62,13 @@ export async function PUT(
       status,
     } = body;
 
-    const stmt = db.prepare(`
+    await query(`
       UPDATE students SET
-        firstName = ?, lastName = ?, email = ?, phone = ?,
-        dateOfBirth = ?, address = ?, city = ?, postalCode = ?,
-        country = ?, status = ?, updatedAt = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-
-    stmt.run(
+        firstName = $1, lastName = $2, email = $3, phone = $4,
+        dateOfBirth = $5, address = $6, city = $7, postalCode = $8,
+        country = $9, status = $10, updatedAt = CURRENT_TIMESTAMP
+      WHERE id = $11
+    `, [
       firstName,
       lastName,
       email,
@@ -79,12 +80,13 @@ export async function PUT(
       country || null,
       status || "active",
       id
-    );
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("❌ Failed to update student:", error);
     return NextResponse.json(
-      { error: "Failed to update student" },
+      { error: "Failed to update student", details: String(error) },
       { status: 500 }
     );
   }
@@ -100,13 +102,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    await initializeDatabase();
     const { id } = await params;
-    db.prepare("DELETE FROM students WHERE id = ?").run(id);
+    
+    await query("DELETE FROM students WHERE id = $1", [id]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error("❌ Failed to delete student:", error);
     return NextResponse.json(
-      { error: "Failed to delete student" },
+      { error: "Failed to delete student", details: String(error) },
       { status: 500 }
     );
   }

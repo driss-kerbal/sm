@@ -3,10 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { NextAuthSessionProvider } from "@/components/NextAuthSessionProvider";
 import { DatabaseInitializer } from "@/components/DatabaseInitializer";
-import { initializeDatabase } from "@/lib/db";
-
-// Initialize database on server startup
-initializeDatabase();
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

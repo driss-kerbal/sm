@@ -1,44 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { initializeDatabase, getDb } from "@/lib/db";
+import { initializeDatabase, query } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🏥 Health check started");
     
     // Initialize database
-    initializeDatabase();
-    const db = getDb();
+    await initializeDatabase();
     
-    // Check if database tables exist
-    const userTableExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-    ).get();
+    // Check database tables
+    const userTableResult = await query(
+      `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='users') as exists`
+    );
     
-    const studentTableExists = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='students'"
-    ).get();
+    const studentTableResult = await query(
+      `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='students') as exists`
+    );
+    
+    const userTableExists = userTableResult.rows[0]?.exists;
+    const studentTableExists = studentTableResult.rows[0]?.exists;
     
     // Check admin user exists
-    const adminExists = db.prepare(
-      "SELECT COUNT(*) as count FROM users WHERE email = 'admin@example.com'"
-    ).get() as any;
+    const adminResult = await query(
+      "SELECT COUNT(*) as count FROM users WHERE email = $1",
+      ["admin@example.com"]
+    );
     
     const health = {
       status: "healthy",
       timestamp: new Date().toISOString(),
       database: {
         initialized: true,
+        type: "PostgreSQL",
         tables: {
-          users: !!userTableExists,
-          students: !!studentTableExists,
+          users: userTableExists,
+          students: studentTableExists,
         },
-        adminUserExists: (adminExists?.count || 0) > 0,
+        adminUserExists: (adminResult.rows[0]?.count || 0) > 0,
       },
       environment: {
         nodeEnv: process.env.NODE_ENV,
         hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
         hasNextAuthUrl: !!process.env.NEXTAUTH_URL,
         nextAuthUrl: process.env.NEXTAUTH_URL,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
       },
     };
     
