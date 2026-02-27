@@ -1,6 +1,9 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "next build",
   "outputDirectory": ".next",
-  "devCommand": "npm run dev",
-  "installCommand": "npm ci"
+  "devCommand": "next dev",
+  "installCommand": "npm ci",
+  "framework": "nextjs",
+  "nodeVersion": "18.x",
+  "regions": ["iad1"]
 }
