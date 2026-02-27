@@ -5,7 +5,7 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -13,9 +13,10 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const student = db
       .prepare("SELECT * FROM students WHERE id = ?")
-      .get(params.id);
+      .get(id);
 
     if (!student) {
       return NextResponse.json(
@@ -35,7 +36,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -43,6 +44,7 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const {
       firstName,
@@ -76,7 +78,7 @@ export async function PUT(
       postalCode || null,
       country || null,
       status || "active",
-      params.id
+      id
     );
 
     return NextResponse.json({ success: true });
@@ -90,7 +92,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -98,7 +100,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    db.prepare("DELETE FROM students WHERE id = ?").run(params.id);
+    const { id } = await params;
+    db.prepare("DELETE FROM students WHERE id = ?").run(id);
 
     return NextResponse.json({ success: true });
   } catch (error) {
