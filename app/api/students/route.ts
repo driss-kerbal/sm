@@ -1,10 +1,14 @@
-import { db } from "@/lib/db";
+import { getDb, initializeDatabase } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 
 export async function GET(request: NextRequest) {
   try {
+    // Ensure database is initialized
+    initializeDatabase();
+    const db = getDb();
+
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,8 +17,9 @@ export async function GET(request: NextRequest) {
     const students = db.prepare("SELECT * FROM students ORDER BY id DESC").all();
     return NextResponse.json(students);
   } catch (error) {
+    console.error("❌ Failed to fetch students:", error);
     return NextResponse.json(
-      { error: "Failed to fetch students" },
+      { error: "Failed to fetch students", details: String(error) },
       { status: 500 }
     );
   }
@@ -22,6 +27,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Ensure database is initialized
+    initializeDatabase();
+    const db = getDb();
+
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

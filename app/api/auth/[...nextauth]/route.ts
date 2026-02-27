@@ -1,7 +1,15 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { db } from "@/lib/db";
+import { getDb, initializeDatabase } from "@/lib/db";
 import bcrypt from "bcryptjs";
+
+// Initialize database on startup
+try {
+  initializeDatabase();
+  console.log("✅ Database initialized on NextAuth startup");
+} catch (error) {
+  console.error("⚠️ Database initialization warning (will retry on first auth attempt):", error);
+}
 
 // Verify required environment variables
 if (!process.env.NEXTAUTH_SECRET) {
@@ -22,7 +30,12 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         try {
+          // Ensure database is initialized
+          initializeDatabase();
+          const db = getDb();
+
           if (!credentials?.email || !credentials?.password) {
+            console.warn("❌ Missing email or password");
             return null;
           }
 
@@ -30,6 +43,7 @@ export const authOptions: NextAuthOptions = {
           const user = stmt.get(credentials.email) as any;
 
           if (!user) {
+            console.warn(`❌ User not found: ${credentials.email}`);
             return null;
           }
 
@@ -39,9 +53,11 @@ export const authOptions: NextAuthOptions = {
           );
 
           if (!isPasswordValid) {
+            console.warn(`❌ Invalid password for user: ${credentials.email}`);
             return null;
           }
 
+          console.log(`✅ User authenticated: ${credentials.email}`);
           return {
             id: user.id.toString(),
             email: user.email,
@@ -49,7 +65,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
           };
         } catch (error) {
-          console.error("Auth error:", error);
+          console.error("❌ Auth error:", error);
           return null;
         }
       },
