@@ -8,17 +8,38 @@ export async function GET(request: NextRequest) {
     // Initialize database
     await initializeDatabase();
     
-    // Check database tables
-    const userTableResult = await query(
-      `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='users') as exists`
-    );
+    // Determine database type
+    const usePostgres = !!process.env.DATABASE_URL;
+    const dbType = usePostgres ? "PostgreSQL" : "SQLite";
     
-    const studentTableResult = await query(
-      `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='students') as exists`
-    );
+    let userTableExists = false;
+    let studentTableExists = false;
     
-    const userTableExists = userTableResult.rows[0]?.exists;
-    const studentTableExists = studentTableResult.rows[0]?.exists;
+    try {
+      if (usePostgres) {
+        // PostgreSQL table check
+        const userTableResult = await query(
+          `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='users') as exists`
+        );
+        const studentTableResult = await query(
+          `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='students') as exists`
+        );
+        userTableExists = userTableResult.rows[0]?.exists;
+        studentTableExists = studentTableResult.rows[0]?.exists;
+      } else {
+        // SQLite table check - use sqlite_master instead of information_schema
+        const userTableResult = await query(
+          `SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='users'`
+        );
+        const studentTableResult = await query(
+          `SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='students'`
+        );
+        userTableExists = (userTableResult.rows[0]?.cnt || 0) > 0;
+        studentTableExists = (studentTableResult.rows[0]?.cnt || 0) > 0;
+      }
+    } catch (err) {
+      console.error("⚠️ Error checking tables:", err);
+    }
     
     // Check admin user exists
     const adminResult = await query(
@@ -31,7 +52,7 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
       database: {
         initialized: true,
-        type: "PostgreSQL",
+        type: dbType,
         tables: {
           users: userTableExists,
           students: studentTableExists,
