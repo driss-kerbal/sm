@@ -2,17 +2,7 @@ import { Pool, QueryResult } from 'pg';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 
-// Conditionally import better-sqlite3 only on non-Vercel environments
-let Database: any = null;
-if (process.env.VERCEL === undefined) {
-  try {
-    Database = require('better-sqlite3');
-  } catch (err) {
-    console.warn('better-sqlite3 not available, will use PostgreSQL');
-  }
-}
-
-// Determine which database to use
+// Determine which database to use FIRST
 const isProduction = process.env.NODE_ENV === 'production';
 const isVercel = !!process.env.VERCEL;
 const hasDatabaseUrl = !!process.env.DATABASE_URL;
@@ -48,13 +38,22 @@ export function getPool(): Pool {
 let sqliteDb: any = null;
 
 export function getSqliteDb(): any {
-  if (!Database) {
-    throw new Error('SQLite not available (running on Vercel? Use PostgreSQL)');
+  if (usePostgres) {
+    throw new Error('Cannot use SQLite on Vercel. PostgreSQL is required.');
   }
+  
   if (!sqliteDb) {
-    const dbPath = path.join(process.cwd(), 'students.db');
-    sqliteDb = new Database(dbPath);
-    console.log(`✅ SQLite database connected: ${dbPath}`);
+    try {
+      // Dynamically require better-sqlite3 only when needed (local development)
+      // @ts-ignore - better-sqlite3 only available locally
+      const Database = require('better-sqlite3');
+      const dbPath = path.join(process.cwd(), 'students.db');
+      sqliteDb = new Database(dbPath);
+      console.log(`✅ SQLite database connected: ${dbPath}`);
+    } catch (err) {
+      console.error('❌ Failed to initialize SQLite:', err);
+      throw new Error('SQLite initialization failed. Are you on Vercel? Use PostgreSQL instead.');
+    }
   }
   return sqliteDb;
 }
